@@ -32,6 +32,7 @@ import android.util.Log;
 import android.widget.Toast;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -91,6 +92,7 @@ public class BluetoothSensorManager extends SensorManager {
   private final MessageParser messageParser;
   private final BluetoothConnectionManager bluetoothConnectionManager;
   private SensorDataSet sensorDataSet = null;
+  private final BluetoothDevice device;
 
   // Handler that gets information back from the bluetoothConnectionManager
   private final Handler messageHandler = new Handler(Looper.getMainLooper()) {
@@ -128,9 +130,11 @@ public class BluetoothSensorManager extends SensorManager {
    * @param context the context
    * @param messageParser the message parser
    */
-  public BluetoothSensorManager(Context context, MessageParser messageParser) {
+  public BluetoothSensorManager(Context context, MessageParser messageParser,
+		                        BluetoothDevice device) {
     this.context = context;
     this.messageParser = messageParser;
+    this.device = device;
     bluetoothConnectionManager = new BluetoothConnectionManager(
         bluetoothAdapter, messageHandler, messageParser);
   }
@@ -142,33 +146,17 @@ public class BluetoothSensorManager extends SensorManager {
 
   @Override
   protected void setUpChannel() {
-    BluetoothDevice device;
-
     if (!isEnabled()) {
       Log.w(TAG, "Bluetooth not enabled.");
       return;
     }
-    
-    String address = PreferencesUtils.getString(
-        context, R.string.bluetooth_sensor_key, PreferencesUtils.BLUETOOTH_SENSOR_DEFAULT);
-    if (PreferencesUtils.BLUETOOTH_SENSOR_DEFAULT.equals(address)) {
-      Set<BluetoothDevice> bondedDevices = bluetoothAdapter.getBondedDevices();
-      if (bondedDevices.isEmpty()) {
-          Log.w(TAG, "No bluetooth address and no bonded blueooth devices");
-          return;
-      }
-      device = bondedDevices.iterator().next();
-      Log.w(TAG, "No bluetooth address, connecting to the firt bondend bluetooth device");
-    } else  {
-        Log.d(TAG, "Connecting to bluetooth address: " + address);
-        try {
-            device = bluetoothAdapter.getRemoteDevice(address);
-        } catch (IllegalArgumentException e) {
-            Log.d(TAG, "Unable to get remote device for: " + address, e);
-            return;
-        }
+
+    if (device == null) {
+        Log.w(TAG, "setUpChannel: device is null.");
+      return;
     }
-    
+
+    Log.d(TAG, "setUpChannel: connecting to bluetooth address: " + device.getAddress());
     bluetoothConnectionManager.connect(device);
   }
 

@@ -17,9 +17,15 @@
 package com.google.android.apps.mytracks.services.sensors;
 
 /*import com.google.android.apps.mytracks.services.sensors.ant.AntSensorManager;*/
+import java.util.HashSet;
+import java.util.Set;
+
+import com.google.android.apps.mytracks.content.Sensor.SensorState;
 import com.google.android.apps.mytracks.util.PreferencesUtils;
 import com.google.android.maps.mytracks.R;
 
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 import android.util.Log;
 
@@ -30,83 +36,84 @@ import android.util.Log;
  */
 public class SensorManagerFactory {
 
-  private static SensorManager systemSensorManager = null;
-  private static SensorManager tempSensorManager = null;
+  private static String TAG = "SensorManagerFactory";
 
-  private SensorManagerFactory() {}
+  private static Set<SensorManager> sensorManagers;
+  private static SensorManager sensorManager;
 
-  /**
-   * Gets the system sensor manager.
-   *
-   * @param context the context
-   */
-  public static SensorManager getSystemSensorManager(Context context) {
-    releaseTempSensorManager();
-    releaseSystemSensorManager();
-    systemSensorManager = getSensorManager(context, true);
-    if (systemSensorManager != null) {
-      systemSensorManager.startSensor();
-    }
-    return systemSensorManager;
+  private static Set<SensorManager> getSensorManagers(Context context) {
+	if (sensorManagers != null)
+		return sensorManagers;
+
+	final BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+	if (adapter == null)
+		return null;
+
+    final Set<BluetoothDevice> devices = adapter.getBondedDevices();
+	SensorManager sm = null;
+	sensorManagers = new HashSet<SensorManager>();
+	for (BluetoothDevice dev: devices) {
+			  if (PolarSensorManager.supports(dev)) {
+				  sm = new PolarSensorManager(context, dev);
+			  } else if (ZephyrSensorManager.supports(dev)) {
+				  sm = new ZephyrSensorManager(context, dev);
+			  }
+			  if (sm != null) {
+				  sensorManagers.add(sm);
+			      sm.startSensor();
+			      sm = null;
+			  }
+	}
+    return sensorManagers;
   }
 
-  /**
-   * Releases the system sensor manager.
-   */
-  public static void releaseSystemSensorManager() {
-    if (systemSensorManager != null) {
-      systemSensorManager.stopSensor();
-    }
-    systemSensorManager = null;
+  private static void releaseSensorManagers() {
+	  if (sensorManagers != null) {
+		  for (SensorManager sm: sensorManagers) {
+			sm.stopSensor();
+		    Log.d(TAG, "releaseSensorManagers: stopSensor()");
+
+		  }
+		  sensorManagers = null;
+	  }
   }
 
-  /**
-   * Gets the temp sensor manager.
-   *
-   * @param context
-   */
-  public static SensorManager getTempSensorManager(Context context) {
-    releaseTempSensorManager();
-    if (systemSensorManager != null) {
-      return null;
-    }
-    tempSensorManager = getSensorManager(context, false);
-    if (tempSensorManager != null) {
-      tempSensorManager.startSensor();
-    }
-    return tempSensorManager;
+  public static boolean isEmpty(Context context){
+	  return (getSensorManagers(context).isEmpty());
   }
 
-  /**
-   * Releases the temp sensor manager.
-   */
-  public static void releaseTempSensorManager() {
-    if (tempSensorManager != null) {
-      tempSensorManager.stopSensor();
-    }
-    tempSensorManager = null;
-  }
+  public static SensorManager getSensorManager(Context context) {
+	  if (sensorManager != null)
+		  return sensorManager;
 
-  /**
-   * Gets the sensor manager.
-   *
-   * @param context the context
-   */
-  private static SensorManager getSensorManager(Context context, boolean sendPageViews) {
-    String sensorType = PreferencesUtils.getString(
-        context, R.string.sensor_type_key, PreferencesUtils.SENSOR_TYPE_DEFAULT);
-    Log.d("SensorManagerFactory", "getSensorManager: begin");
-    /*if (sensorType.equals(context.getString(R.string.sensor_type_value_ant))) {
-      if (sendPageViews) {
-        AnalyticsUtils.sendPageViews(context, AnalyticsUtils.SENSOR_ANT);
+	  if (getSensorManagers(context).isEmpty()) {
+		   Log.d(TAG, "getSensorManager: sensorManagers is empty.");
+		   return null;
       }
-      return new AntSensorManager(context);
-    } else*/
-    /*if (sensorType.equals(context.getString(R.string.sensor_type_value_zephyr))) {*/
-      return new ZephyrSensorManager(context);
-    /*} else if (sensorType.equals(context.getString(R.string.sensor_type_value_polar))) {
-      return new PolarSensorManager(context);
-    }
-    return null; */
+
+	  if ((sensorManagers.size() == 1)) {
+		   sensorManager = sensorManagers.iterator().next();
+		   return sensorManager;
+	  }
+
+	  for (SensorManager sm: sensorManagers) {
+		  if (sm.getSensorState() == SensorState.CONNECTED) {
+			  sensorManager = sm;
+			  for (SensorManager osm: sensorManagers) {
+				  if (osm != sm) {
+					  osm.stopSensor();
+					  Log.d(TAG, "getSensorManager: stopSensor()");
+				  }
+			  }
+			} else {
+					Log.d(TAG, "getSensorManager: " + sm.toString() + ":" + sm.getSensorState());
+			}
+	  }
+	  return sensorManager;
+  }
+
+  public static void releaseSensorManager() {
+		releaseSensorManagers();
+		sensorManager = null;
   }
 }

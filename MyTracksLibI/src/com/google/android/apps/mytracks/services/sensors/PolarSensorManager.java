@@ -16,6 +16,7 @@
 
 package com.google.android.apps.mytracks.services.sensors;
 
+import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 
 /**
@@ -24,7 +25,16 @@ import android.content.Context;
  * @author Jimmy Shih
  */
 public class PolarSensorManager extends BluetoothSensorManager {
-  public PolarSensorManager(Context context) {
-    super(context, new PolarMessageParser());
+
+  protected static boolean supports(BluetoothDevice device) {
+	  String name = device.getName();
+
+	  if (name == null)
+		  return false;
+      return name.startsWith("Polar iWL");
+  }
+
+  public PolarSensorManager(Context context, BluetoothDevice device) {
+    super(context, new PolarMessageParser(), device);
   }
 }

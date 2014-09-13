@@ -16,6 +16,7 @@
 
 package com.google.android.apps.mytracks.services.sensors;
 
+import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 
 /**
@@ -25,7 +26,15 @@ import android.content.Context;
  */
 public class ZephyrSensorManager extends BluetoothSensorManager {
 
-  public ZephyrSensorManager(Context context) {
-    super(context, new ZephyrMessageParser());
+  protected static boolean supports(BluetoothDevice device) {
+    String name = device.getName();
+
+    if (name == null)
+	  return false;
+    return name.startsWith("HXM");
+  }
+
+  public ZephyrSensorManager(Context context, BluetoothDevice device) {
+    super(context, new ZephyrMessageParser(), device);
   }
 }
